@@ -29,7 +29,8 @@ export async function getPlayerStats(playerName) {
             "kdr": playerStats.data.lifetime["Average K/D Ratio"],
             "skill_img": fiLevelUrls[result.data.games.csgo.skill_level],
             "best_map": bestMapWinRateFinder(playerStats.data.segments),
-            "average_hs": playerStats.data.lifetime["Average Headshots %"]
+            "average_hs": playerStats.data.lifetime["Average Headshots %"],
+            "player_id": playerId
                }
     } catch (error) {
         console.error(error)
@@ -37,7 +38,7 @@ export async function getPlayerStats(playerName) {
     }
 }
 
-export async function getPlayerStats20(playerName){
+export async function getPlayerStats20(playerId){
     // Average Kills
     // Average Headshots
     // Average KD
@@ -46,19 +47,46 @@ export async function getPlayerStats20(playerName){
 
     // Process
     // Get last 20 maps and WR's
-    const playerId = "20dcc7de-c82b-4d12-9bbd-b9c448b63888"
     const twentyMatches = await getPastMatchesByPlayer(playerId)
     const matchInfos = []
-    // Get match stat info
-    const test = await getMatchStats(twentyMatches.matchIds[0])
-    console.log(test)
-        // twentyMatches.matchIds.forEach((match) => {
-        //     console.log(getMatchStats(match))
-        // })
+    // Get match stat info & get stat info for specific player
 
-        // Get stat info for specific player
-        // Sum together
-    // Return
+    // let statsPromises = []
+    // response.data.items.forEach(match => {
+    //     matchIds.push(match.match_id)
+    //     statsPromises.push(parseMatchWon(match, playerId))
+    // })
+
+    // const listOfResults = await Promise.all(statsPromises)
+
+    const allPlayerMatches = []
+    twentyMatches.matchIds.forEach( async (match) => {
+        allPlayerMatches.push(getMatchStats(match))
+    })
+
+    const twentyPlayerMatchStats = await Promise.all(allPlayerMatches)
+    let allPlayerMatchStats = []
+    twentyPlayerMatchStats.forEach( result => {
+        let teams = result["rounds"][0].teams
+        allPlayerMatchStats.push(teams[0]["players"].concat(teams[1]["players"]).find(pl => pl.player_id === playerId).player_stats)
+    })
+    // Sum together
+    let summedDict = {}
+    allPlayerMatchStats.forEach(matchPlayerStats => { // Always will be <= 20 matches
+        Object.keys(matchPlayerStats).forEach(pStatKey => {
+            if (!summedDict.hasOwnProperty(pStatKey)) {
+                summedDict[pStatKey] = Number(matchPlayerStats[pStatKey])
+            } else {
+                summedDict[pStatKey] += Number(matchPlayerStats[pStatKey])
+            }
+        })
+    })
+    Object.keys(summedDict).forEach(key => {
+        summedDict[key] = summedDict[key]/allPlayerMatchStats.length
+    })
+    console.log("summed dict")
+    console.log(summedDict)
+    return summedDict
 }
 
 function bestMapWinRateFinder(mapData) {
@@ -131,21 +159,38 @@ async function getPastMatchesByPlayer(playerId, numMatches = 20) {
     return {"playerWinRates": playerWinRates, "matchIds": matchIds}
 }
 
+// TODO: Make version from above where you pass in match_ids instead of player (these already collected)
+
 async function getMatchStats(matchId) {
     /* Input: matchId, playerId
        Output: matchInfo
     */
     // Map needs to be found because it's not in this original json for some reason..
-    return new Promise((resolve, rej) => {
-        axios.get("https://open.faceit.com/data/v4/matches/"+matchId+"/stats").then(response => {
-            resolve(response.data)
-        }).catch(error => {
-            rej(error)
-            console.log(error)
-        })
-    })
+    const result = await axios.get("https://open.faceit.com/data/v4/matches/"+matchId+"/stats") //.then(response => {
+    return result.data
+    //     resolve(response.data)
+    // }).catch(error => {
+    //     rej(error)
+    //     console.log(error)
+    // })
 
 }
+
+// function getMatchStats(matchId) {
+//     /* Input: matchId, playerId
+//        Output: matchInfo
+//     */
+//     // Map needs to be found because it's not in this original json for some reason..
+//     return new Promise((resolve, rej) => {
+//         axios.get("https://open.faceit.com/data/v4/matches/"+matchId+"/stats").then(response => {
+//             resolve(response.data)
+//         }).catch(error => {
+//             rej(error)
+//             console.log(error)
+//         })
+//     })
+
+// }
 
 function parseMatchWon(matchJson, playerId) {
     /* Input: Match as JSON, playerId
