@@ -36,6 +36,7 @@ export async function getPlayerStats(playerName) {
       // This get requires stats of a user to be retrieved via player_id rather than player_name
       "https://open.faceit.com/data/v4/players/" + playerId + "/stats/csgo"
     );
+    const bestMap = bestMapWinRateFinder(playerStats.data.segments);
     return {
       // .stats information
       avatar: result.data.avatar,
@@ -43,7 +44,7 @@ export async function getPlayerStats(playerName) {
       recent_results: playerStats.data.lifetime["Recent Results"],
       kdr: playerStats.data.lifetime["Average K/D Ratio"],
       skill_img: fiLevelUrls[result.data.games.csgo.skill_level],
-      best_map: bestMapWinRateFinder(playerStats.data.segments),
+      best_map: bestMap,
       average_hs: playerStats.data.lifetime["Average Headshots %"],
       player_id: playerId,
     };
@@ -60,17 +61,47 @@ export async function getPlayerStats20(playerId) {
         Assumptions: This currently is made specifically for csgo. In the future, this could quickly be implemented for other games.
   */
 
+  const playerWinRates = {
+    de_cache: { won: 0, lost: 0 },
+    de_dust2: { won: 0, lost: 0 },
+    de_mirage: { won: 0, lost: 0 },
+    de_nuke: { won: 0, lost: 0 },
+    de_overpass: { won: 0, lost: 0 },
+    de_train: { won: 0, lost: 0 },
+    de_inferno: { won: 0, lost: 0 },
+  };
+
   const twentyMatches = await getPastMatchesByPlayer(playerId); // Gets winrates and match_id's for the last 20 games
   const allPlayerMatches = [];
   twentyMatches.matchIds.forEach(async (match) => {
     allPlayerMatches.push(getMatchStats(match)); // Gets statistics of the match given match_id
   });
-
   const twentyPlayerMatchStats = await Promise.all(allPlayerMatches);
+  if (twentyPlayerMatchStats.length === 0) {
+    return {}
+  }
   let allPlayerMatchStats = [];
   twentyPlayerMatchStats.forEach((result) => {
     // Gets the specific players stats for each match
-    let teams = result["rounds"][0].teams;
+    const res = result["rounds"][0];
+    const teams = res.teams;
+    const winningTeamId = res.round_stats.Winner;
+    const mapLabel = res.round_stats.Map;
+    let winningTeam = false;
+    if (winningTeamId === teams[0].team_id) {
+      if (
+        teams[0].players.map((player) => player.player_id).includes(playerId)
+      ) {
+        winningTeam = true;
+      }
+    } else {
+      if (
+        teams[1].players.map((player) => player.player_id).includes(playerId)
+      ) {
+        winningTeam = true;
+      }
+    }
+    playerWinRates[mapLabel][winningTeam === true ? "won" : "lost"] += 1;
     allPlayerMatchStats.push(
       teams[0]["players"]
         .concat(teams[1]["players"])
@@ -92,7 +123,34 @@ export async function getPlayerStats20(playerId) {
     // Takes the average for each stat
     summedDict[key] = summedDict[key] / allPlayerMatchStats.length;
   });
-  return summedDict;
+  let maps = Object.keys(playerWinRates);
+  let highestWR = 0; // playerWinRates[maps[0]]["won"]/(playerWinRates[maps[0]]["won"]+playerWinRates[maps[0]]["lost"])
+  let highestMap = "";
+  maps.forEach((map) => {
+    if (playerWinRates[map]["won"] + playerWinRates[map]["lost"] > 3) {
+      const numWon = Number(playerWinRates[map]["won"]);
+      const numLost = Number(playerWinRates[map]["lost"]);
+      let winrate = numWon / (numWon + numLost) * 100;
+      // if (winrate === highestWR) {
+      //   if (playerWinRates[map]["won"] > playerWinRates[highestMap]["won"]) {
+      //     highestWR = winrate
+      //     highestMap = map
+      //   }
+      // }
+      if (
+        winrate > highestWR ||
+        (winrate === highestWR &&
+          (highestMap === "" ||
+            playerWinRates[map]["won"] > playerWinRates[highestMap]["won"]))
+      ) {
+        highestWR = winrate;
+        highestMap = map;
+      }
+    }
+  });
+  // TODO: How to emphasize WR on many games is better than on a few
+  // TODO: Careful for when highestMap does not change?
+  return {...summedDict, "highest_wr": highestWR, "highest_map": highestMap, "highest_wins": playerWinRates[highestMap]["won"], "highest_losses": playerWinRates[highestMap]["lost"]}
 }
 
 function bestMapWinRateFinder(mapData) {
@@ -113,26 +171,56 @@ function bestMapWinRateFinder(mapData) {
 }
 
 // WIP so is commented out as it is not used
-// async function matchHandler(matchId) {
-//   // Match ID Example 1-81792399-81a0-41f4-8cb3-26b789f684a5
-//   const result = await axios
-//     .get("https://open.faceit.com/data/v4/matches/" + matchId)
-//     .then((response) => {
-//       const teamOne = response.data.teams.faction1.roster;
-//       const teamTwo = response.data.teams.faction2.roster;
-//       // For each player, get json with winrates
-//       getPastMatchesByPlayer("20dcc7de-c82b-4d12-9bbd-b9c448b63888").then(
-//         (result) => {
-//           console.log(result);
-//         }
-//       );
-//       // Send info to discord
-//     })
-//     .catch((error) => {
-//       console.log(error);
-//     });
-//   return result;
-// }
+export async function matchHandler(matchId) {
+  // Match ID Example 1-81792399-81a0-41f4-8cb3-26b789f684a5
+  const result = await axios
+    .get("https://open.faceit.com/data/v4/matches/" + matchId)
+    .then(async response => {
+      const teamOne = response.data.teams.faction1.roster.map((player) => player.player_id);
+      const teamTwo = response.data.teams.faction2.roster.map((player) => player.player_id);
+      // For each player, get json with winrates
+      let teamOneStatsPromised = []
+      teamOne.forEach(pId => {
+        teamOneStatsPromised.push(getPastMatchesByPlayer(pId))
+      })
+      let teamTwoStatsPromised = []
+      teamTwo.forEach(pId => {
+        teamTwoStatsPromised.push(getPastMatchesByPlayer(pId))
+      })
+      const teamOneStats = await Promise.all(teamOneStatsPromised);
+      const teamTwoStats = await Promise.all(teamTwoStatsPromised);
+      // console.log(teamOneStats)
+      // console.log(teamTwoStats)
+      const teamOneDict = {};
+      teamOneStats.forEach(playerStats => {
+        Object.keys(playerStats["playerWinRates"]).forEach((pStatKey) => {
+          if (!teamOneDict.hasOwnProperty(pStatKey)) {
+            teamOneDict[pStatKey] = { "won" : Number(playerStats["playerWinRates"][pStatKey]["won"]), "lost": Number(playerStats["playerWinRates"][pStatKey]["lost"])}
+          } else {
+            teamOneDict[pStatKey]["won"] += Number(playerStats["playerWinRates"][pStatKey]["won"]);
+            teamOneDict[pStatKey]["lost"] += Number(playerStats["playerWinRates"][pStatKey]["lost"]);
+          }
+        });
+      })
+      const teamTwoDict = {};
+      teamTwoStats.forEach(playerStats => {
+        Object.keys(playerStats["playerWinRates"]).forEach((pStatKey) => {
+          if (!teamTwoDict.hasOwnProperty(pStatKey)) {
+            teamTwoDict[pStatKey] = { "won" : Number(playerStats["playerWinRates"][pStatKey]["won"]), "lost": Number(playerStats["playerWinRates"][pStatKey]["lost"])}
+          } else {
+            teamTwoDict[pStatKey]["won"] += Number(playerStats["playerWinRates"][pStatKey]["won"]);
+            teamTwoDict[pStatKey]["lost"] += Number(playerStats["playerWinRates"][pStatKey]["lost"]);
+          }
+        });
+      })
+      return {"teamOne": teamOneDict, "teamTwo": teamTwoDict}
+    })
+    .catch((error) => {
+      console.log(error);
+      return {}
+    });
+  return result;
+}
 
 async function getPastMatchesByPlayer(playerId, numMatches = 20) {
   /*  Retrieves the last 20 matches of the player
@@ -147,7 +235,6 @@ async function getPastMatchesByPlayer(playerId, numMatches = 20) {
 
        Request URL - https://open.faceit.com/data/v4/players/20dcc7de-c82b-4d12-9bbd-b9c448b63888/history?game=csgo&offset=0&limit=20
     */
-
   const response = await axios.get(
     "https://open.faceit.com/data/v4/players/" +
       playerId +
@@ -162,6 +249,7 @@ async function getPastMatchesByPlayer(playerId, numMatches = 20) {
     de_overpass: { won: 0, lost: 0 },
     de_train: { won: 0, lost: 0 },
     de_inferno: { won: 0, lost: 0 },
+    de_vertigo: { won: 0, lost: 0}
   };
 
   let matchIds = [];
@@ -170,13 +258,12 @@ async function getPastMatchesByPlayer(playerId, numMatches = 20) {
     matchIds.push(match.match_id);
     statsPromises.push(parseMatchWon(match, playerId));
   });
-
   const listOfResults = await Promise.all(statsPromises);
   listOfResults.forEach((mapWL) => {
     let map = Object.keys(mapWL)[0];
     playerWinRates[map][mapWL[map]] += 1;
   });
-
+  // The match id's are provided so that in the future they could be parsed to allow for more weight on different matches
   return { playerWinRates: playerWinRates, matchIds: matchIds };
 }
 
@@ -213,4 +300,126 @@ function parseMatchWon(matchJson, playerId) {
         console.log(error);
       });
   });
+}
+
+export function bestWinRate(team1, team2) {
+  let maps = Object.keys(team1);
+  let highestWROne = 0;
+  let highestMapOne = "";
+  let highestWRTwo = 0;
+  let highestMapTwo = "";
+  let lowestWROne = 100;
+  let lowestMapOne = "";
+  let lowestWRTwo = 100;
+  let lowestMapTwo = "";
+  let choiceWROne = 0;
+  let choiceWRMapOne = 0;
+  let choiceOne = "";
+  let choiceWRTwo = 0;
+  let choiceWRMapTwo = 0;
+  let choiceTwo = ""
+  maps.forEach((map) => {
+    if (team1[map]["won"] + team1[map]["lost"] > 3) {
+      const numWon = Number(team1[map]["won"]);
+      const numLost = Number(team1[map]["lost"]);
+      let winrate = numWon / (numWon + numLost) * 100;
+      if (
+        winrate > highestWROne ||
+        (winrate === highestWROne &&
+          (highestMapOne === "" ||
+            team1[map]["won"] > team1[highestMapOne]["won"]))
+      ) {
+        highestWROne = winrate;
+        highestMapOne = map;
+      }
+    }
+  });
+  maps.forEach((map) => {
+    if (team2[map]["won"] + team2[map]["lost"] > 3) {
+      const numWon = Number(team2[map]["won"]);
+      const numLost = Number(team2[map]["lost"]);
+      let winrate = numWon / (numWon + numLost) * 100;
+      if (
+        winrate > highestWRTwo ||
+        (winrate === highestWRTwo &&
+          (highestMapTwo === "" ||
+            team2[map]["won"] > team2[highestMapTwo]["won"]))
+      ) {
+        highestWRTwo = winrate;
+        highestMapTwo = map;
+      }
+    }
+  });
+  maps.forEach((map) => {
+    if (team1[map]["won"] + team1[map]["lost"] > 3) {
+      const numWon = Number(team1[map]["won"]);
+      const numLost = Number(team1[map]["lost"]);
+      let winrate = numWon / (numWon + numLost) * 100;
+      if (
+        winrate < lowestWROne ||
+        (winrate === lowestWROne &&
+          (lowestMapOne === "" ||
+            team1[map]["won"] < team1[lowestMapOne]["won"]))
+      ) {
+        lowestWROne = winrate;
+        lowestMapOne = map;
+      }
+    }
+  });
+  maps.forEach((map) => {
+    if (team2[map]["won"] + team2[map]["lost"] > 3) {
+      const numWon = Number(team2[map]["won"]);
+      const numLost = Number(team2[map]["lost"]);
+      let winrate = numWon / (numWon + numLost) * 100;
+      if (
+        winrate < lowestWRTwo ||
+        (winrate === lowestWRTwo &&
+          (lowestMapTwo === "" ||
+            team2[map]["won"] < team2[lowestMapTwo]["won"]))
+      ) {
+        lowestWRTwo = winrate;
+        lowestMapTwo = map;
+      }
+    }
+  });
+  maps.forEach((map) => { // Future todo: Sort in order of best to worst instead of just picking the best
+    if (team1[map]["won"] + team1[map]["lost"] > 3 && team2[map]["won"] + team2[map]["lost"] > 3) {
+      const numWon = Number(team1[map]["won"]);
+      const numLost = Number(team1[map]["lost"]);
+      let winrate1 = numWon / (numWon + numLost) * 100;
+      const numWon2 = Number(team2[map]["won"]);
+      const numLost2 = Number(team2[map]["lost"]);
+      let winrate2 = numWon2 / (numWon2 + numLost2) * 100;
+      let wrComp = winrate1-winrate2
+      if (winrate1-winrate2 > 0) { // Team 1 is stronger on this map
+        if (wrComp > choiceWROne) {
+          choiceWROne = wrComp
+          choiceOne = map
+          choiceWRMapOne = winrate1
+        }
+      } else {  // Team 2 is stronger on this map
+        if (abs(wrComp) > choiceWRTwo) {
+          choiceWRTwo = wrComp
+          choiceTwo = map
+          choiceWRMapTwo = winrate2
+        }
+      }
+    }
+  });
+  return {
+    "highestWROne": highestWROne,
+    "highestMapOne": highestMapOne,
+    "highestWRTwo": highestWRTwo,
+    "highestMapTwo": highestMapTwo,
+    "lowestWROne": lowestWROne,
+    "lowestMapOne": lowestMapOne,
+    "lowestWRTwo": lowestWRTwo,
+    "lowestMapTwo": lowestMapTwo,
+    "choiceWROne": choiceWROne,
+    "choiceWRMapOne": choiceWRMapOne,
+    "choiceOne": choiceOne,
+    "choiceWRTwo": choiceWRTwo,
+    "choiceWRMapTwo": choiceWRMapTwo,
+    "choiceTwo": choiceTwo
+  }
 }
