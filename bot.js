@@ -12,7 +12,7 @@ const winEmoji = ":green_square:"
 const lossEmoji = ":red_square:"
 
 client.on("ready", () => {
-	console.log("I am ready!")
+	console.log("FaceIt Discord Bot is live")
 })
 
 client.on("message", async (message) => {
@@ -71,7 +71,8 @@ client.on("message", async (message) => {
 		if (Object.keys(stats20).length === 0) {
 			message.channel.send(
 				"The player does not have any matches played in the last month."
-			)
+      )
+      return
 		}
 		const embed = {
 			title: player + "'s 20-game average FACEIT stats",
