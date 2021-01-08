@@ -12,6 +12,8 @@ const winEmoji = ":green_square:"
 const lossEmoji = ":red_square:"
 const faceitAvatarURL =
 	"https://pbs.twimg.com/profile_images/1143140925696368640/xgPqiB58_400x400.png"
+const baseURL = "https://www.faceit.com/en/players/"
+const baseRoomURL = "https://www.faceit.com/en/csgo/room/"
 
 client.on("ready", () => {
 	console.log("FaceIt Discord Bot is live")
@@ -24,16 +26,19 @@ client.on("message", async (message) => {
 	if (command === "stats") {
 		const player = args[0]
 		const stats = await getPlayerStats(player)
+		if (Object.keys(stats).length === 0) {
+			message.reply("There was no player found with the name " + args[0] + ".")
+		}
 		const embed = {
 			title: player + "'s Lifetime FACEIT Stats",
-			url: "https://www.faceit.com/en/players/" + player,
+			url: baseURL + player,
 			color: 12345678,
 			thumbnail: {
 				url: stats.avatar,
 			},
 			author: {
 				name: player, // Adding the flag is cumbersome although the data is accessible --> easiest method i.e. copy pasting the flag "🇫🇮"
-				url: "https://www.faceit.com/en/players/" + player,
+				url: baseURL + player,
 				icon_url: stats.skill_img,
 			},
 			fields: [
@@ -65,7 +70,7 @@ client.on("message", async (message) => {
 				},
 			],
 		}
-		message.channel.send({ embed })
+		message.reply({ embed })
 	} else if (command === "stats20") {
 		const player = args[0]
 		const stats = await getPlayerStats(player)
@@ -78,14 +83,14 @@ client.on("message", async (message) => {
 		}
 		const embed = {
 			title: player + "'s 20-game average FACEIT stats",
-			url: "https://www.faceit.com/en/players/" + player,
+			url: baseURL + player,
 			color: 12345678,
 			thumbnail: {
 				url: stats.avatar,
 			},
 			author: {
 				name: ":flag_" + stats.country + ": " + player,
-				url: "https://www.faceit.com/en/players/" + player,
+				url: baseURL + player,
 				icon_url: stats.skill_img,
 			},
 			fields: [
@@ -121,20 +126,20 @@ client.on("message", async (message) => {
 				},
 			],
 		}
-		message.channel.send({ embed })
+		message.reply({ embed })
 	} else if (command === "match") {
 		const result = await matchHandler(args[0])
 		const finalResults = bestWinRate(result.teamOne, result.teamTwo)
 		const embed = {
 			title: "Match ID " + args[0],
-			url: "https://www.faceit.com/en/csgo/room/" + args[0],
+			url: baseRoomURL + args[0],
 			color: 12345678,
 			thumbnail: {
 				url: faceitAvatarURL,
 			},
 			author: {
 				name: "Click here to go to the match room",
-				url: "https://www.faceit.com/en/csgo/room/" + args[0],
+				url: baseRoomURL + args[0],
 				// icon_url: stats.skill_img,
 			},
 			fields: [
@@ -182,7 +187,7 @@ client.on("message", async (message) => {
 						finalResults.choiceWRTwo.toString() +
 						"% higher winrate on " +
 						finalResults.choiceTwo.toString() +
-						" compared to team 2's " +
+						" compared to team 1's " +
 						(finalResults.choiceWRMapTwo - finalResults.choiceWRTwo)
 							.toFixed(2)
 							.toString() +
@@ -191,10 +196,7 @@ client.on("message", async (message) => {
 			],
 		}
 		// TODO: Would be interesting to get best map in last 20 matches as well
-		message.channel.send({ embed })
-		message.channel.send(finalResults)
-	} else if (command === "test") {
-		message.reply(`\:flag_fi:`)
+		message.reply({ embed })
 	}
 })
 

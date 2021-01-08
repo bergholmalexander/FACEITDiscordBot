@@ -20,8 +20,7 @@ export async function getPlayerStats(playerName) {
         Input: playerName
         Output: playerStats information (playerStats may change over time, see return)
         Assumptions: This currently is made specifically for csgo. In the future, this could quickly be implemented for other games.
-  */
-
+  	*/
 	try {
 		const result = await axios.get(
 			// get player_id so we can search for rest of the stats
@@ -124,19 +123,13 @@ export async function getPlayerStats20(playerId) {
 		summedDict[key] = summedDict[key] / allPlayerMatchStats.length
 	})
 	let maps = Object.keys(playerWinRates)
-	let highestWR = 0 // playerWinRates[maps[0]]["won"]/(playerWinRates[maps[0]]["won"]+playerWinRates[maps[0]]["lost"])
+	let highestWR = 0
 	let highestMap = ""
 	maps.forEach((map) => {
 		if (playerWinRates[map]["won"] + playerWinRates[map]["lost"] > 3) {
 			const numWon = Number(playerWinRates[map]["won"])
 			const numLost = Number(playerWinRates[map]["lost"])
 			let winrate = (numWon / (numWon + numLost)) * 100
-			// if (winrate === highestWR) {
-			//   if (playerWinRates[map]["won"] > playerWinRates[highestMap]["won"]) {
-			//     highestWR = winrate
-			//     highestMap = map
-			//   }
-			// }
 			if (
 				winrate > highestWR ||
 				(winrate === highestWR &&
@@ -164,9 +157,9 @@ function bestMapWinRateFinder(mapData) {
         Input: JSON map data (data.segments)
         Output: best map (string), winrate% (string)
   */
-	// TODO: Currently hard defined 20 matches as min played for it to count in "best map winrate". Could be i.e. % of matches played?
 	let highest = ""
 	let highestWR = 0
+	// Currently hard def 20 matches played on this map to be counted
 	mapData.forEach((mD) => {
 		if (mD.stats["Win Rate %"] > highestWR && mD.stats["Matches"] > 20) {
 			highestWR = mD.stats["Win Rate %"]
@@ -176,7 +169,6 @@ function bestMapWinRateFinder(mapData) {
 	return { map: highest, mapWR: highestWR }
 }
 
-// WIP so is commented out as it is not used
 export async function matchHandler(matchId) {
 	// Match ID Example 1-81792399-81a0-41f4-8cb3-26b789f684a5
 	const result = await axios
@@ -332,86 +324,77 @@ function parseMatchWon(matchJson, playerId) {
 }
 
 export function bestWinRate(team1, team2) {
-	let maps = Object.keys(team1)
-	let highestWROne = 0
-	let highestWRTwo = 0
-	let highestMapOne = ""
-	let highestMapTwo = ""
-	let lowestWROne = 100
-	let lowestWRTwo = 100
-	let lowestMapOne = ""
-	let lowestMapTwo = ""
+	const highestWRT1 = highestWRMap(team1)
+	const highestWRT2 = highestWRMap(team2)
+	const lowestWRT1 = lowestWRMap(team1)
+	const lowestWRT2 = lowestWRMap(team2)
+	const choiceWR = choice(team1, team2)
+
+	return {
+		highestWROne: highestWRT1.highestWR,
+		highestMapOne: highestWRT1.highestMap,
+		highestWRTwo: highestWRT2.highestWR,
+		highestMapTwo: highestWRT2.highestMap,
+		lowestWROne: lowestWRT1.lowestWR,
+		lowestMapOne: lowestWRT1.lowestMap,
+		lowestWRTwo: lowestWRT2.lowestWR,
+		lowestMapTwo: lowestWRT2.lowestMap,
+		...choiceWR,
+	}
+}
+
+function highestWRMap(team) {
+	const maps = Object.keys(team)
+	let highestWR = 0
+	let highestMap = ""
+	maps.forEach((map) => {
+		if (team[map]["won"] + team[map]["lost"] > 3) {
+			const numWon = Number(team[map]["won"])
+			const numLost = Number(team[map]["lost"])
+			let winrate = (numWon / (numWon + numLost)) * 100
+			if (
+				winrate > highestWR ||
+				(winrate === highestWR &&
+					(highestMap === "" || team[map]["won"] > team[highestMap]["won"]))
+			) {
+				highestWR = winrate.toFixed(2)
+				highestMap = map
+			}
+		}
+	})
+	return { highestWR, highestMap }
+}
+
+function lowestWRMap(team) {
+	const maps = Object.keys(team)
+	let lowestWR = 100
+	let lowestMap = ""
+	maps.forEach((map) => {
+		if (team[map]["won"] + team[map]["lost"] > 3) {
+			const numWon = Number(team[map]["won"])
+			const numLost = Number(team[map]["lost"])
+			let winrate = (numWon / (numWon + numLost)) * 100
+			if (
+				winrate < lowestWR ||
+				(winrate === lowestWR &&
+					(lowestMap === "" || team[map]["won"] < team[lowestMap]["won"]))
+			) {
+				lowestWR = winrate.toFixed(2)
+				lowestMap = map
+			}
+		}
+	})
+	return { lowestWR, lowestMap }
+}
+
+function choice(team1, team2) {
 	let choiceWROne = 0
 	let choiceWRMapOne = 0
 	let choiceOne = ""
 	let choiceTwo = ""
 	let choiceWRTwo = 0
 	let choiceWRMapTwo = 0
-
-	maps.forEach((map) => {
-		if (team1[map]["won"] + team1[map]["lost"] > 3) {
-			const numWon = Number(team1[map]["won"])
-			const numLost = Number(team1[map]["lost"])
-			let winrate = (numWon / (numWon + numLost)) * 100
-			if (
-				winrate > highestWROne ||
-				(winrate === highestWROne &&
-					(highestMapOne === "" ||
-						team1[map]["won"] > team1[highestMapOne]["won"]))
-			) {
-				highestWROne = winrate
-				highestMapOne = map
-			}
-		}
-	})
-	maps.forEach((map) => {
-		if (team2[map]["won"] + team2[map]["lost"] > 3) {
-			const numWon = Number(team2[map]["won"])
-			const numLost = Number(team2[map]["lost"])
-			let winrate = (numWon / (numWon + numLost)) * 100
-			if (
-				winrate > highestWRTwo ||
-				(winrate === highestWRTwo &&
-					(highestMapTwo === "" ||
-						team2[map]["won"] > team2[highestMapTwo]["won"]))
-			) {
-				highestWRTwo = winrate
-				highestMapTwo = map
-			}
-		}
-	})
-	maps.forEach((map) => {
-		if (team1[map]["won"] + team1[map]["lost"] > 3) {
-			const numWon = Number(team1[map]["won"])
-			const numLost = Number(team1[map]["lost"])
-			let winrate = (numWon / (numWon + numLost)) * 100
-			if (
-				winrate < lowestWROne ||
-				(winrate === lowestWROne &&
-					(lowestMapOne === "" ||
-						team1[map]["won"] < team1[lowestMapOne]["won"]))
-			) {
-				lowestWROne = winrate
-				lowestMapOne = map
-			}
-		}
-	})
-	maps.forEach((map) => {
-		if (team2[map]["won"] + team2[map]["lost"] > 3) {
-			const numWon = Number(team2[map]["won"])
-			const numLost = Number(team2[map]["lost"])
-			let winrate = (numWon / (numWon + numLost)) * 100
-			if (
-				winrate < lowestWRTwo ||
-				(winrate === lowestWRTwo &&
-					(lowestMapTwo === "" ||
-						team2[map]["won"] < team2[lowestMapTwo]["won"]))
-			) {
-				lowestWRTwo = winrate
-				lowestMapTwo = map
-			}
-		}
-	})
+	const maps = Object.keys(team1)
 	maps.forEach((map) => {
 		// Future todo: Sort in order of best to worst instead of just picking the best
 		if (
@@ -424,37 +407,25 @@ export function bestWinRate(team1, team2) {
 			const numWon2 = Number(team2[map]["won"])
 			const numLost2 = Number(team2[map]["lost"])
 			let winrate2 = (numWon2 / (numWon2 + numLost2)) * 100
-			let wrComp = winrate1 - winrate2
+			let wrComp = (winrate1 - winrate2).toFixed(2)
 			if (wrComp > 0) {
 				// Team 1 is stronger on this map
 				if (wrComp > choiceWROne) {
 					choiceWROne = wrComp
 					choiceOne = map
-					choiceWRMapOne = winrate1
+					choiceWRMapOne = winrate1.toFixed(2)
 				}
 			} else {
 				// Team 2 is stronger on this map
 				if (Math.abs(wrComp) > choiceWRTwo) {
-					choiceWRTwo = Math.abs(wrComp)
+					choiceWRTwo = Math.abs(wrComp).toFixed(2)
 					choiceTwo = map
-					choiceWRMapTwo = winrate2
+					choiceWRMapTwo = winrate2.toFixed(2)
 				}
 			}
 		}
 	})
-	lowestWROne = lowestWROne.toFixed(2)
-	lowestWRTwo = lowestWRTwo.toFixed(2)
-	choiceWROne = choiceWROne.toFixed(2)
-	choiceWRTwo = choiceWRTwo.toFixed(2)
 	return {
-		highestWROne: highestWROne,
-		highestMapOne: highestMapOne,
-		highestWRTwo: highestWRTwo,
-		highestMapTwo: highestMapTwo,
-		lowestWROne: lowestWROne,
-		lowestMapOne: lowestMapOne,
-		lowestWRTwo: lowestWRTwo,
-		lowestMapTwo: lowestMapTwo,
 		choiceWROne: choiceWROne,
 		choiceWRMapOne: choiceWRMapOne,
 		choiceOne: choiceOne,
