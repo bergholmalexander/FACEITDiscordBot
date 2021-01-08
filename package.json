@@ -1,3 +1,23 @@
 {
-  "type": "module"
+	"type": "module",
+	"name": "faceitdiscordbot",
+	"description": "A discord bot that retrieves player information as well as gives you useful statistics for your match",
+	"version": "1.0.0",
+	"main": "bot.js",
+	"scripts": {
+		"start": "node --experimental-json-modules ./bot.js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/bergholmalexander/FACEITDiscordBot.git"
+	},
+	"author": "",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/bergholmalexander/FACEITDiscordBot/issues"
+	},
+	"homepage": "https://github.com/bergholmalexander/FACEITDiscordBot#readme",
+	"dependencies": {
+		"axios": "^0.21.0"
+	}
 }

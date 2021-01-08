@@ -31,7 +31,6 @@ export async function getPlayerStats(playerName) {
 				playerName
 		)
 		const playerId = result.data.player_id
-		const elo = result.data.games.csgo.faceit_elo
 		const playerStats = await axios.get(
 			// This get requires stats of a user to be retrieved via player_id rather than player_name
 			"https://open.faceit.com/data/v4/players/" + playerId + "/stats/csgo"
@@ -40,7 +39,8 @@ export async function getPlayerStats(playerName) {
 		return {
 			// .stats information
 			avatar: result.data.avatar,
-			elo: elo,
+			country: result.data.country,
+			elo: result.data.games.csgo.faceit_elo,
 			recent_results: playerStats.data.lifetime["Recent Results"],
 			kdr: playerStats.data.lifetime["Average K/D Ratio"],
 			skill_img: fiLevelUrls[result.data.games.csgo.skill_level],
@@ -263,7 +263,7 @@ async function getPastMatchesByPlayer(playerId, numMatches = 20) {
 			"/history?game=csgo&offset=0&limit=" +
 			numMatches
 	)
-	const playerWinRates = {
+	let playerWinRates = {
 		de_cache: { won: 0, lost: 0 },
 		de_dust2: { won: 0, lost: 0 },
 		de_mirage: { won: 0, lost: 0 },
@@ -282,20 +282,15 @@ async function getPastMatchesByPlayer(playerId, numMatches = 20) {
 	})
 	const listOfResults = await Promise.all(statsPromises)
 	listOfResults.forEach((mapWL) => {
-    console.log("mapWL is: ", mapWL)
-    if (mapWL) { // If not null or undefined
-      let map = Object.keys(mapWL)[0]
-      console.log(map)
-      console.log(mapWL)
-      console.log(mapWL[map])
-      console.log("playerWinRates")
-      console.log(playerWinRates[map])
-      console.log(playerWinRates[map][mapWL[map]])
-      playerWinRates[map][mapWL[map]] += 1 
-    }
+		if (mapWL) {
+			// If not null or undefined
+			let map = Object.keys(mapWL)[0]
+			const key = mapWL[map]
+			if (playerWinRates[map]) playerWinRates[map][key] += 1
+		}
 	})
 	// The match id's are provided so that in the future they could be parsed to allow for more weight on different matches
-	return { playerWinRates: playerWinRates, matchIds: matchIds }
+	return { playerWinRates, matchIds }
 }
 
 // TODO: Make version from above where you pass in match_ids instead of player (these already collected)
@@ -328,22 +323,30 @@ function parseMatchWon(matchJson, playerId) {
 			})
 			.catch((error) => {
 				// TODO: Handle fail without crashing
-				console.log("parseMatchWon Error: ", error)
+				console.log(
+					"parseMatchWon Error: " + matchId + " could not be processed"
+				)
 				resolve(null)
 			})
 	})
 }
 
 export function bestWinRate(team1, team2) {
-  console.log(team1)
 	let maps = Object.keys(team1)
-	let highestWROne = (highestWRTwo = 0)
-	let highestMapOne = (highestMapTwo = "")
-	let lowestWROne = (lowestWRTwo = 100)
-	let lowestMapOne = (lowestMapTwo = "")
-	let choiceWROne = (choiceWRMapOne = 0)
-	let choiceOne = (choiceTwo = "")
-	let choiceWRTwo = (choiceWRMapTwo = 0)
+	let highestWROne = 0
+	let highestWRTwo = 0
+	let highestMapOne = ""
+	let highestMapTwo = ""
+	let lowestWROne = 100
+	let lowestWRTwo = 100
+	let lowestMapOne = ""
+	let lowestMapTwo = ""
+	let choiceWROne = 0
+	let choiceWRMapOne = 0
+	let choiceOne = ""
+	let choiceTwo = ""
+	let choiceWRTwo = 0
+	let choiceWRMapTwo = 0
 
 	maps.forEach((map) => {
 		if (team1[map]["won"] + team1[map]["lost"] > 3) {
@@ -422,7 +425,7 @@ export function bestWinRate(team1, team2) {
 			const numLost2 = Number(team2[map]["lost"])
 			let winrate2 = (numWon2 / (numWon2 + numLost2)) * 100
 			let wrComp = winrate1 - winrate2
-			if (winrate1 - winrate2 > 0) {
+			if (wrComp > 0) {
 				// Team 1 is stronger on this map
 				if (wrComp > choiceWROne) {
 					choiceWROne = wrComp
@@ -431,14 +434,18 @@ export function bestWinRate(team1, team2) {
 				}
 			} else {
 				// Team 2 is stronger on this map
-				if (abs(wrComp) > choiceWRTwo) {
-					choiceWRTwo = wrComp
+				if (Math.abs(wrComp) > choiceWRTwo) {
+					choiceWRTwo = Math.abs(wrComp)
 					choiceTwo = map
 					choiceWRMapTwo = winrate2
 				}
 			}
 		}
 	})
+	lowestWROne = lowestWROne.toFixed(2)
+	lowestWRTwo = lowestWRTwo.toFixed(2)
+	choiceWROne = choiceWROne.toFixed(2)
+	choiceWRTwo = choiceWRTwo.toFixed(2)
 	return {
 		highestWROne: highestWROne,
 		highestMapOne: highestMapOne,
