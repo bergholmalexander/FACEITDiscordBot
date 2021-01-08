@@ -8,16 +8,16 @@ FaceIt Discord Bot allows you to retrieve player and match statistics.
 
 ## Examples
 - .stats [playerName]
-<p align='center'>  
-  <img src='imgs/stats' width='500'/>
+<p align='left'>  
+  <img src='imgs/stats.png' width='500'/>
 </p>
 - .stats20 [playerName]
-<p align='center'>  
-  <img src='imgs/stats20' width='500'/>
+<p align='left'>  
+  <img src='imgs/stats20.png' width='500'/>
 </p>
 - .matches [matchId]
-<p align='center'>  
-  <img src='imgs/matches' width='500'/>
+<p align='left'>  
+  <img src='imgs/matches.png' width='500'/>
 </p>
 
 ## Upcoming
