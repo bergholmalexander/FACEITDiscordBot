@@ -89,7 +89,7 @@ client.on("message", async (message) => {
 				url: stats.avatar,
 			},
 			author: {
-				name: ":flag_" + stats.country + ": " + player,
+				name: player,
 				url: baseURL + player,
 				icon_url: stats.skill_img,
 			},
@@ -117,7 +117,7 @@ client.on("message", async (message) => {
 						"'s best map is " +
 						stats20["highest_map"] +
 						" with a winrate of " +
-						stats20["highest_wr"] +
+						stats20["highest_wr"].toFixed(2) +
 						"% with " +
 						stats20["highest_wins"] +
 						" wins and " +

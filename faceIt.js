@@ -126,7 +126,8 @@ export async function getPlayerStats20(playerId) {
 	let highestWR = 0
 	let highestMap = ""
 	maps.forEach((map) => {
-		if (playerWinRates[map]["won"] + playerWinRates[map]["lost"] > 3) {
+		if (playerWinRates[map]["won"] + playerWinRates[map]["lost"] > 1) {
+			// Placing this at 1 for now because it doesn't read more for some reason - makes more sense at > 3
 			const numWon = Number(playerWinRates[map]["won"])
 			const numLost = Number(playerWinRates[map]["lost"])
 			let winrate = (numWon / (numWon + numLost)) * 100
